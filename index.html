@@ -217,6 +217,28 @@
             <div id="network-container" class="w-full h-96 border border-slate-100 rounded-xl bg-slate-50"></div>
         </div>
 
+        <!-- CROSS-STOCK SHAREHOLDER CONNECTIONS SECTION (NEWLY ADDED) -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+            <div class="flex flex-wrap justify-between items-center gap-2">
+                <div>
+                    <h3 class="font-bold text-slate-800 text-base flex items-center gap-2">
+                        🔀 Cross-Stock Shareholder Connections
+                    </h3>
+                    <p class="text-xs text-slate-400 font-semibold mt-0.5">
+                        Shareholders of <span id="cross-stock-symbol-title" class="font-extrabold text-indigo-600">--</span> who also hold shares in other listed companies. Click any stock to navigate to it.
+                    </p>
+                </div>
+                <span id="cross-investor-badge" class="bg-amber-100 text-amber-700 text-xs font-black px-3 py-1 rounded-full border border-amber-200 uppercase tracking-wide">
+                    0 CONNECTED INVESTORS
+                </span>
+            </div>
+
+            <!-- Dynamic Container Cards for Connected Investors -->
+            <div id="cross-stock-cards-container" class="space-y-4">
+                <!-- Dynamic Content Generated Here -->
+            </div>
+        </div>
+
         <!-- SHAREHOLDER RELATIONSHIP STRUCTURE -->
         <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6">
             <div class="flex justify-between items-center">
@@ -311,7 +333,7 @@
             { id: 'empati', name: 'Lo Kheng Hong', icon: '👤', keywords: ['LO KHENG HONG', 'DILD', 'NISP', 'GJTL', 'CFIN'] }
         ];
 
-        // Register Plugin Custom Chart.js untuk menampilkan Label % langsung di dalam Slice Donut
+        // Register Plugin Custom Chart.js untuk menampilkan Label % di Donut
         Chart.register({
             id: 'slicePercentLabels',
             afterDraw: function(chart) {
@@ -742,18 +764,21 @@
                 }
             });
 
-            // OWNERSHIP NETWORK GRAPH (BBCA STYLE PRECISE ADAPTATION)
+            // OWNERSHIP NETWORK GRAPH
             renderOwnershipNetwork(symbol, stockRows);
+
+            // RENDER CROSS-STOCK SHAREHOLDER CONNECTIONS
+            renderCrossStockConnections(symbol, stockRows);
         }
 
-        // Render Vis.js Network Diagram (Replikasi Persis Ownership Network BBCA)
+        // Render Vis.js Network Diagram (Replikasi BBCA Style)
         function renderOwnershipNetwork(symbol, stockRows) {
             const container = document.getElementById('network-container');
 
             const nodes = [];
             const edges = [];
 
-            // 1. Central Node (Current Stock, e.g. BBCA)
+            // 1. Central Node (Current Stock)
             nodes.push({
                 id: symbol,
                 label: symbol,
@@ -869,6 +894,107 @@
 
             if (networkInstance) networkInstance.destroy();
             networkInstance = new vis.Network(container, data, options);
+        }
+
+        // Render Cross-Stock Shareholder Connections Card List
+        function renderCrossStockConnections(symbol, stockRows) {
+            document.getElementById('cross-stock-symbol-title').innerText = symbol;
+            const cardsContainer = document.getElementById('cross-stock-cards-container');
+            cardsContainer.innerHTML = '';
+
+            let connectedInvestorsCount = 0;
+
+            stockRows.forEach(holder => {
+                const holderName = holder.INVESTOR_NAME;
+                if (!holderName) return;
+
+                // Cari saham publik lain yang dimiliki oleh pemegang saham ini
+                const otherHoldings = rawData.filter(r => r.INVESTOR_NAME === holderName && r.SHARE_CODE !== symbol);
+
+                if (otherHoldings.length > 0) {
+                    connectedInvestorsCount++;
+
+                    const isCorp = holder.INVESTOR_CLASSIFICATION === 'Corporate';
+                    const categoryTag = isCorp ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600';
+                    const currentPct = (parseFloat(holder.PERCENTAGE) || 0).toFixed(2);
+                    const initialLetter = holderName.trim().charAt(0).toUpperCase();
+
+                    // Card Wrapper
+                    const card = document.createElement('div');
+                    card.className = 'bg-slate-50/70 border border-slate-200/80 rounded-2xl p-5 space-y-4 shadow-sm';
+
+                    // Header Investor
+                    let cardHTML = `
+                        <div class="flex justify-between items-center pb-3 border-b border-slate-200/60">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-indigo-500 text-white font-extrabold flex items-center justify-center text-lg shadow-sm">
+                                    ${initialLetter}
+                                </div>
+                                <div>
+                                    <h4 class="font-extrabold text-slate-800 text-sm tracking-tight">${holderName}</h4>
+                                    <div class="flex items-center gap-2 mt-0.5">
+                                        <span class="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-md ${categoryTag}">
+                                            ${holder.INVESTOR_CLASSIFICATION || 'INVESTOR'}
+                                        </span>
+                                        <span class="text-xs font-semibold text-slate-400">
+                                            ${currentPct}% in this stock
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-2xl font-black text-indigo-600 block leading-none">${otherHoldings.length}</span>
+                                <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">OTHER STOCKS</span>
+                            </div>
+                        </div>
+
+                        <!-- Rows for Other Stock Holdings -->
+                        <div class="space-y-2.5 pt-1">
+                    `;
+
+                    // Loop saham silang
+                    otherHoldings.forEach(oh => {
+                        const ohPct = parseFloat(oh.PERCENTAGE) || 0;
+                        const companyName = oh.ISSUER_NAME || oh.SHARE_CODE;
+
+                        cardHTML += `
+                            <div class="flex items-center justify-between text-xs py-1 hover:bg-white px-2 rounded-xl transition">
+                                <div class="flex items-center gap-4 min-w-[200px]">
+                                    <button onclick="selectStock('${oh.SHARE_CODE}')" class="font-black text-indigo-600 hover:text-indigo-800 hover:underline w-12 text-left">
+                                        ${oh.SHARE_CODE}
+                                    </button>
+                                    <span class="font-bold text-slate-600 truncate max-w-[280px]">
+                                        ${companyName}
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <div class="w-24 bg-slate-200 h-1.5 rounded-full overflow-hidden hidden sm:block">
+                                        <div class="bg-indigo-500 h-full" style="width: ${Math.min(100, ohPct * 2)}%"></div>
+                                    </div>
+                                    <span class="font-black text-slate-700 w-12 text-right font-mono">
+                                        ${ohPct.toFixed(2)}%
+                                    </span>
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    cardHTML += `</div>`; // Tutup div space-y-2.5
+                    card.innerHTML = cardHTML;
+                    cardsContainer.appendChild(card);
+                }
+            });
+
+            // Update Badge Total Connected Investors
+            document.getElementById('cross-investor-badge').innerText = `${connectedInvestorsCount} CONNECTED INVESTORS`;
+
+            if (connectedInvestorsCount === 0) {
+                cardsContainer.innerHTML = `
+                    <div class="text-center py-8 text-slate-400 text-xs italic bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                        Tidak ditemukan hubungan kepemilikan saham silang (cross-holding) untuk pemegang saham ${symbol}.
+                    </div>
+                `;
+            }
         }
     </script>
 </body>
