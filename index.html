@@ -45,16 +45,36 @@
             <input type="file" id="excel-input" accept=".xlsx, .xls" class="text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-amber-500 file:text-white hover:file:bg-amber-600">
         </div>
 
-        <!-- Search Bar & Selector -->
-        <div class="flex flex-col md:flex-row gap-4 items-center">
-            <div class="relative w-full md:w-1/3">
-                <input type="text" id="search-input" placeholder="Cari kode saham atau pemegang saham..." class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
-                <span class="absolute left-3 top-2.5 text-slate-400">🔍</span>
-            </div>
-            <select id="stock-select" class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
-                <option value="">Memuat saham...</option>
-            </select>
+        <!-- Search Bar -->
+        <div class="relative w-full">
+            <input type="text" id="search-input" placeholder="Cari kode saham atau pemegang saham..." class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
+            <span class="absolute left-3 top-2.5 text-slate-400">🔍</span>
         </div>
+
+        <!-- CONGLOMERATE GROUPS FILTER SECTION -->
+        <div class="space-y-3">
+            <div class="flex justify-between items-center text-xs font-bold text-slate-500">
+                <span class="flex items-center gap-1.5 text-slate-700">
+                    🏢 Conglomerate Groups
+                </span>
+                <span id="group-count-badge" class="text-slate-400">18 groups available</span>
+            </div>
+
+            <!-- Conglomerate Filter Pills -->
+            <div id="conglomerate-pills-container" class="flex flex-wrap gap-2 items-center text-xs font-bold">
+                <!-- Dynamic Pills Loaded Here -->
+            </div>
+
+            <!-- Stock Ticker Buttons Container (30 emiten + Label More) -->
+            <div id="stock-pills-container" class="flex flex-wrap gap-2 items-center pt-2">
+                <!-- Dynamic Stock Buttons Loaded Here -->
+            </div>
+        </div>
+
+        <!-- Hidden Select for Fallback/Compatibility -->
+        <select id="stock-select" class="hidden">
+            <option value="">Memuat saham...</option>
+        </select>
 
         <!-- Selected Stock Hero Card -->
         <div class="bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
@@ -171,15 +191,39 @@
     <script>
         let rawData = [];
         let stockList = [];
+        let selectedStock = '';
+        let selectedGroup = 'ALL';
+        let visibleGroupCount = 7; // Menampilkan 7 grup awal + tombol "+10 more"
         let donutChartInstance = null;
         let barChartInstance = null;
 
         // Nama file Excel yang digunakan
         const EXCEL_FILENAME = 'peng-06-00015-satu-persen.xlsx';
 
+        // Daftar Conglomerate Groups & Keyword Pencarian Saham/Pemegang Sahamnya
+        const CONGLOMERATE_GROUPS = [
+            { id: 'low_tuck_kwong', name: 'Low Tuck Kwong', icon: '⛏️', keywords: ['LOW TUCK KWONG', 'BAYAN'] },
+            { id: 'prajogo_pangestu', name: 'Prajogo Pangestu', icon: '🏭', keywords: ['PRAJOGO PANGESTU', 'BARITO', 'BREN', 'BRPT', 'TPIA', 'CUAN', 'PTRO'] },
+            { id: 'hermanto_tanoko', name: 'Hermanto Tanoko', icon: '💧', keywords: ['HERMANTO TANOKO', 'CLEO', 'AVIA', 'DEPO', 'PEVE', 'RISE', 'ZONE'] },
+            { id: 'happy_hapsoro', name: 'Happy Hapsoro', icon: '🖼️', keywords: ['HAPPY HAPSORO', 'HAPSORO', 'PSAB', 'RAJA', 'FORU', 'MINA'] },
+            { id: 'aguan', name: 'Aguan / Sugianto Kusuma', icon: '🏢', keywords: ['AGUAN', 'SUGIANTO KUSUMA', 'PANI'] },
+            { id: 'chairul_tanjung', name: 'Chairul Tanjung', icon: '🏛️', keywords: ['CHAIRUL TANJUNG', 'MEGA', 'CT CORP', 'AGRO'] },
+            { id: 'boy_tohir', name: 'Boy Tohir', icon: '⚡', keywords: ['BOY TOHIR', 'GARIBALDI TOHIR', 'ADRO', 'ESSA', 'MDKA'] },
+            { id: 'tp_rachmat', name: 'TP Rachmat', icon: '🌴', keywords: ['RACHMAT', 'TRIPUTRA', 'TAPG', 'DSNG', 'DRMA'] },
+            { id: 'salim', name: 'Salim Group', icon: '🌾', keywords: ['SALIM', 'INDF', 'ICBP', 'AMMN', 'LSIP', 'SIMP'] },
+            { id: 'sinarmas', name: 'Sinar Mas', icon: '📄', keywords: ['SINAR MAS', 'INKP', 'TKIM', 'BSDE', 'DSSA'] },
+            { id: 'djarum', name: 'Djarum Group', icon: '🏦', keywords: ['DJARUM', 'BBCA', 'TOWR', 'BELI'] },
+            { id: 'astra', name: 'Astra Group', icon: '🚗', keywords: ['ASTRA', 'ASII', 'UNTR', 'AUTO', 'AALI'] },
+            { id: 'lippo', name: 'Lippo Group', icon: '🏥', keywords: ['LIPPO', 'LPKR', 'LPCK', 'SILO', 'MPPA'] },
+            { id: 'bakrie', name: 'Bakrie Group', icon: '🌋', keywords: ['BAKRIE', 'VKTR', 'BNBR', 'BUMI', 'BRMS'] },
+            { id: 'mnc', name: 'MNC Group', icon: '📺', keywords: ['HARY TANOE', 'BHIT', 'MNCN', 'BMTR', 'KPIG'] },
+            { id: 'panin', name: 'Panin Group', icon: '💳', keywords: ['PANIN', 'PNBN', 'PNLF', 'PNIN'] },
+            { id: 'pakuwon', name: 'Pakuwon Group', icon: '🏬', keywords: ['PAKUWON', 'PWON', 'TEJO SEKOTO'] },
+            { id: 'empati', name: 'Lo Kheng Hong', icon: '👤', keywords: ['LO KHENG HONG', 'DILD', 'NISP', 'GJTL', 'CFIN'] }
+        ];
+
         // Auto-fetch file on load
         window.addEventListener('DOMContentLoaded', () => {
-            // Menggunakan query timestamp (?v=...) untuk bypass cache browser saat file diupdate di server
             const cacheBuster = new Date().getTime();
             fetch(`${EXCEL_FILENAME}?v=${cacheBuster}`)
                 .then(res => {
@@ -193,7 +237,7 @@
                 });
         });
 
-        // Manual File Upload Handler (Fallback jika fetch gagal)
+        // Manual File Upload Handler
         document.getElementById('excel-input').addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
@@ -207,7 +251,6 @@
             const sheetName = workbook.SheetNames[0];
             const sheet = workbook.Sheets[sheetName];
             
-            // Skip 5 disclaimer rows
             const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
             const dataRows = json.slice(5); 
             if (dataRows.length < 2) return;
@@ -231,36 +274,136 @@
             stockList = [...new Set(rawData.map(r => r.SHARE_CODE))].sort();
 
             // Set metadata
-            const sampleDate = rawData[0]?.DATE ? new Date((rawData[0].DATE - (25567 + 2)) * 86400 * 1000).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : "30-Jun-2026";
+            const sampleDate = rawData[0]?.DATE ? new Date((rawData[0].DATE - (25567 + 2)) * 86400 * 1000).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : "27-Feb-2026";
             document.getElementById('date-badge').innerText = `📅 Data: ${sampleDate}`;
             document.getElementById('stocks-badge').innerText = `📊 ${stockList.length} Stocks`;
+            document.getElementById('group-count-badge').innerText = `${CONGLOMERATE_GROUPS.length} groups available`;
 
-            // Populate selector
-            const select = document.getElementById('stock-select');
-            select.innerHTML = '';
-            stockList.forEach(code => {
-                const opt = document.createElement('option');
-                opt.value = code;
-                opt.innerText = code;
-                select.appendChild(opt);
-            });
+            // Default Stock
+            selectedStock = stockList.includes('BBCA') ? 'BBCA' : stockList[0];
 
-            // Event Listeners
-            select.addEventListener('change', (e) => renderStock(e.target.value));
+            // Render Conglomerate Pills & Stock Pills
+            renderConglomeratePills();
+            renderStockPills();
+
+            // Event Listeners for Search Input
             document.getElementById('search-input').addEventListener('input', (e) => {
-                const query = e.target.value.toUpperCase();
+                const query = e.target.value.toUpperCase().trim();
+                if (!query) return;
+
                 const matched = stockList.find(s => s.startsWith(query)) || 
                                 rawData.find(r => r.INVESTOR_NAME && r.INVESTOR_NAME.toUpperCase().includes(query))?.SHARE_CODE;
                 if (matched) {
-                    select.value = matched;
-                    renderStock(matched);
+                    selectStock(matched);
                 }
             });
 
-            // Render Default Stock
-            const defaultStock = stockList.includes('BBCA') ? 'BBCA' : stockList[0];
-            select.value = defaultStock;
-            renderStock(defaultStock);
+            // Initial Render
+            renderStock(selectedStock);
+        }
+
+        // Render Conglomerate Filter Buttons
+        function renderConglomeratePills() {
+            const container = document.getElementById('conglomerate-pills-container');
+            container.innerHTML = '';
+
+            // 1. All Stocks Pill
+            const allBtn = document.createElement('button');
+            const isAllActive = selectedGroup === 'ALL';
+            allBtn.className = `px-3.5 py-1.5 rounded-xl border flex items-center gap-1.5 transition ${isAllActive ? 'bg-indigo-600 text-white border-indigo-600 font-extrabold shadow-sm' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}`;
+            allBtn.innerHTML = `📊 All Stocks`;
+            allBtn.onclick = () => {
+                selectedGroup = 'ALL';
+                renderConglomeratePills();
+                renderStockPills();
+            };
+            container.appendChild(allBtn);
+
+            // 2. Visible Group Pills
+            const visibleGroups = CONGLOMERATE_GROUPS.slice(0, visibleGroupCount);
+            visibleGroups.forEach(group => {
+                const isGroupActive = selectedGroup === group.id;
+                
+                // Calculate stock count for this group
+                const groupStocks = getStocksForGroup(group);
+                
+                const btn = document.createElement('button');
+                btn.className = `px-3.5 py-1.5 rounded-xl border flex items-center gap-1.5 transition ${isGroupActive ? 'bg-indigo-600 text-white border-indigo-600 font-extrabold shadow-sm' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}`;
+                btn.innerHTML = `<span>${group.icon}</span> <span>${group.name}</span> <span class="bg-slate-100 text-slate-600 ${isGroupActive ? 'bg-indigo-700 text-white' : ''} px-1.5 py-0.5 rounded-md text-[10px] ml-0.5">${groupStocks.length}</span>`;
+                btn.onclick = () => {
+                    selectedGroup = group.id;
+                    renderConglomeratePills();
+                    renderStockPills();
+                    if (groupStocks.length > 0) {
+                        selectStock(groupStocks[0]);
+                    }
+                };
+                container.appendChild(btn);
+            });
+
+            // 3. "+10 more" Button
+            if (visibleGroupCount < CONGLOMERATE_GROUPS.length) {
+                const remaining = CONGLOMERATE_GROUPS.length - visibleGroupCount;
+                const moreBtn = document.createElement('button');
+                moreBtn.className = 'px-3 py-1.5 rounded-xl border border-dashed border-indigo-300 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 font-bold transition';
+                moreBtn.innerText = `+${remaining} more`;
+                moreBtn.onclick = () => {
+                    visibleGroupCount += 10;
+                    renderConglomeratePills();
+                };
+                container.appendChild(moreBtn);
+            }
+        }
+
+        // Get Stock List belonging to a Conglomerate Group
+        function getStocksForGroup(group) {
+            if (!group) return [];
+            return stockList.filter(symbol => {
+                const rows = rawData.filter(r => r.SHARE_CODE === symbol);
+                return rows.some(r => {
+                    const investor = (r.INVESTOR_NAME || '').toUpperCase();
+                    return group.keywords.some(kw => symbol.includes(kw) || investor.includes(kw));
+                });
+            });
+        }
+
+        // Render 30 Ticker Buttons + "+925 more (use search)"
+        function renderStockPills() {
+            const container = document.getElementById('stock-pills-container');
+            container.innerHTML = '';
+
+            let filteredStocks = stockList;
+            if (selectedGroup !== 'ALL') {
+                const groupObj = CONGLOMERATE_GROUPS.find(g => g.id === selectedGroup);
+                filteredStocks = getStocksForGroup(groupObj);
+            }
+
+            // Take top 30 stocks
+            const displayStocks = filteredStocks.slice(0, 30);
+
+            displayStocks.forEach(symbol => {
+                const btn = document.createElement('button');
+                const isActive = symbol === selectedStock;
+                btn.className = `px-3 py-1.5 rounded-xl border text-xs font-black transition ${isActive ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}`;
+                btn.innerText = symbol;
+                btn.onclick = () => selectStock(symbol);
+                container.appendChild(btn);
+            });
+
+            // Label "+925 more (use search)"
+            const totalRemaining = stockList.length - displayStocks.length;
+            if (totalRemaining > 0) {
+                const moreLabel = document.createElement('span');
+                moreLabel.className = 'text-xs text-slate-400 font-semibold px-2 py-1 italic';
+                moreLabel.innerText = `+${totalRemaining} more (use search)`;
+                container.appendChild(moreLabel);
+            }
+        }
+
+        function selectStock(symbol) {
+            selectedStock = symbol;
+            renderStockPills();
+            renderStock(symbol);
         }
 
         function renderStock(symbol) {
