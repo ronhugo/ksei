@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KSEI Shareholder Dashboard</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- SheetJS (XLSX Parser) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
+
+    <!-- Top Header -->
+    <header class="bg-white border-b border-slate-200 px-6 py-4 flex flex-wrap justify-between items-center gap-4 sticky top-0 z-50 shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="bg-indigo-600 text-white font-black w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-md">
+                K
+            </div>
+            <div>
+                <h1 class="text-xl font-extrabold text-slate-800 leading-none">KSEI Shareholder Dashboard</h1>
+                <span class="text-xs font-bold text-slate-400 tracking-wider">STOCK OWNERSHIP & RELATIONSHIP EXPLORER</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-3 text-xs font-semibold">
+            <span id="date-badge" class="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-xl border border-slate-200">📅 Data: Loading...</span>
+            <span id="stocks-badge" class="bg-slate-100 text-slate-600 px-3 py-1.5 rounded-xl border border-slate-200">📊 Loading...</span>
+            
+            <!-- SAWERIA SUPPORT BUTTON -->
+            <a href="https://saweria.co/ronhugo" target="_blank" rel="noopener noreferrer" class="bg-amber-500 hover:bg-amber-600 text-white font-bold px-4 py-1.5 rounded-full shadow-md flex items-center gap-1.5 transition transform hover:-translate-y-0.5">
+                ☕ Support Me
+            </a>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto p-6 space-y-6">
+
+        <!-- Upload Fallback (If file is not auto-loaded) -->
+        <div id="file-uploader" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-4">
+            <div class="text-sm text-amber-800">
+                <strong>File Excel tidak terdeteksi otomatis.</strong> Silakan unggah file <code class="bg-amber-100 px-1 rounded">peng-06-00015-satu-persen.xlsx</code> secara manual:
+            </div>
+            <input type="file" id="excel-input" accept=".xlsx, .xls" class="text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-amber-500 file:text-white hover:file:bg-amber-600">
+        </div>
+
+        <!-- Search Bar & Selector -->
+        <div class="flex flex-col md:flex-row gap-4 items-center">
+            <div class="relative w-full md:w-1/3">
+                <input type="text" id="search-input" placeholder="Cari kode saham atau pemegang saham..." class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 pl-10 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
+                <span class="absolute left-3 top-2.5 text-slate-400">🔍</span>
+            </div>
+            <select id="stock-select" class="bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm">
+                <option value="">Memuat saham...</option>
+            </select>
+        </div>
+
+        <!-- Selected Stock Hero Card -->
+        <div class="bg-gradient-to-r from-indigo-500 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
+            <div class="text-xs uppercase font-bold tracking-wider opacity-80">Selected Stock</div>
+            <h2 id="hero-symbol" class="text-4xl font-extrabold my-1">--</h2>
+            <div id="hero-name" class="text-base font-medium opacity-90">Memuat data...</div>
+        </div>
+
+        <!-- Metric Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Total Shareholders</div>
+                <div id="m-total" class="text-3xl font-extrabold text-slate-800 my-1">-</div>
+                <div id="m-total-sub" class="text-xs text-slate-500">-</div>
+            </div>
+            <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Controlling Shareholder</div>
+                <div id="m-control-pct" class="text-3xl font-extrabold text-indigo-600 my-1">-</div>
+                <div id="m-control-name" class="text-xs text-slate-500 truncate">-</div>
+            </div>
+            <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Local Ownership</div>
+                <div id="m-local" class="text-3xl font-extrabold text-blue-500 my-1">-</div>
+                <div id="m-local-sub" class="text-xs text-slate-500">Pemegang Saham Lokal</div>
+            </div>
+            <div class="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
+                <div class="text-xs font-bold text-slate-400 uppercase tracking-wider">Foreign Ownership</div>
+                <div id="m-foreign" class="text-3xl font-extrabold text-amber-500 my-1">-</div>
+                <div id="m-foreign-sub" class="text-xs text-slate-500">Pemegang Saham Asing</div>
+            </div>
+        </div>
+
+        <!-- Charts Section -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                <h3 class="font-bold text-slate-700 mb-4 flex items-center gap-2">🍩 Ownership Distribution</h3>
+                <div class="w-full max-w-xs mx-auto">
+                    <canvas id="donutChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                <h3 class="font-bold text-slate-700 mb-4 flex items-center gap-2">🌐 Local vs Foreign Ownership</h3>
+                <div class="h-64 flex items-center">
+                    <canvas id="barChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- SHAREHOLDER RELATIONSHIP STRUCTURE -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm space-y-6">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                    <span class="text-indigo-500 text-lg">🔗</span>
+                    <h3 class="font-bold text-slate-800 text-base">Shareholder Relationship Structure</h3>
+                </div>
+                <span id="key-holders-badge" class="bg-indigo-50 text-indigo-600 text-xs font-bold px-3 py-1 rounded-full border border-indigo-100">
+                    0 KEY HOLDERS
+                </span>
+            </div>
+
+            <div class="flex flex-col items-center justify-center py-4 relative">
+                <!-- Controlling Parent Node -->
+                <div id="parent-node" class="w-full max-w-md bg-gradient-to-r from-indigo-500 to-indigo-600 text-white rounded-2xl p-5 text-center shadow-md z-10 transition">
+                    <div id="parent-name" class="font-extrabold text-sm uppercase tracking-wide">--</div>
+                    <div id="parent-pct" class="text-3xl font-black my-1">--%</div>
+                    <div id="parent-type" class="text-[10px] font-bold tracking-widest opacity-80 uppercase">CORPORATE · LOCAL</div>
+                </div>
+
+                <!-- Connector Line Top -->
+                <div class="w-0.5 h-8 bg-indigo-300"></div>
+
+                <!-- Listed Company Node -->
+                <div class="w-full max-w-xs bg-white border-2 border-indigo-500 rounded-xl p-4 text-center shadow-sm z-10">
+                    <div id="structure-company-name" class="font-extrabold text-slate-800 text-sm">--</div>
+                    <span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2.5 py-0.5 rounded-full uppercase tracking-wider mt-1 inline-block">LISTED COMPANY</span>
+                </div>
+
+                <!-- Connector Line Bottom -->
+                <div class="w-0.5 h-8 bg-indigo-200"></div>
+
+                <!-- Section Divider Label -->
+                <div class="text-[11px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-3 py-1 rounded-full border border-slate-200 z-10 mb-6">
+                    SIGNIFICANT SHAREHOLDERS (1% — 5%)
+                </div>
+
+                <!-- Minor / Significant Shareholders Nodes -->
+                <div id="minor-nodes-container" class="flex flex-wrap justify-center gap-4 w-full max-w-4xl">
+                    <!-- Dynamic minor nodes -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Shareholders Detail Table -->
+        <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm overflow-x-auto">
+            <h3 class="font-bold text-slate-700 mb-4">📋 All Shareholders Detail</h3>
+            <table class="w-full text-left border-collapse text-sm">
+                <thead>
+                    <tr class="border-b border-slate-200 text-slate-400 font-bold text-xs uppercase">
+                        <th class="py-3 px-2">Investor Name</th>
+                        <th class="py-3 px-2">Classification</th>
+                        <th class="py-3 px-2">Type</th>
+                        <th class="py-3 px-2 text-right">Total Shares</th>
+                        <th class="py-3 px-2 text-right">Percentage</th>
+                    </tr>
+                </thead>
+                <tbody id="shareholders-table">
+                    <!-- Dynamic Rows -->
+                </tbody>
+            </table>
+        </div>
+
+    </main>
+
+    <script>
+        let rawData = [];
+        let stockList = [];
+        let donutChartInstance = null;
+        let barChartInstance = null;
+
+        // Nama file Excel yang digunakan
+        const EXCEL_FILENAME = 'peng-06-00015-satu-persen.xlsx';
+
+        // Auto-fetch file on load
+        window.addEventListener('DOMContentLoaded', () => {
+            // Menggunakan query timestamp (?v=...) untuk bypass cache browser saat file diupdate di server
+            const cacheBuster = new Date().getTime();
+            fetch(`${EXCEL_FILENAME}?v=${cacheBuster}`)
+                .then(res => {
+                    if (!res.ok) throw new Error("File Excel tidak ditemukan secara otomatis.");
+                    return res.arrayBuffer();
+                })
+                .then(buffer => processExcelBuffer(buffer))
+                .catch(err => {
+                    console.warn(err.message);
+                    document.getElementById('file-uploader').classList.remove('hidden');
+                });
+        });
+
+        // Manual File Upload Handler (Fallback jika fetch gagal)
+        document.getElementById('excel-input').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (evt) => processExcelBuffer(evt.target.result);
+            reader.readAsArrayBuffer(file);
+        });
+
+        function processExcelBuffer(buffer) {
+            const workbook = XLSX.read(buffer, { type: 'array' });
+            const sheetName = workbook.SheetNames[0];
+            const sheet = workbook.Sheets[sheetName];
+            
+            // Skip 5 disclaimer rows
+            const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+            const dataRows = json.slice(5); 
+            if (dataRows.length < 2) return;
+
+            const headers = dataRows[0];
+            rawData = dataRows.slice(1).map(row => {
+                let obj = {};
+                headers.forEach((h, idx) => {
+                    if (h) obj[h.toString().trim()] = row[idx];
+                });
+                return obj;
+            }).filter(row => row.SHARE_CODE);
+
+            initDashboard();
+        }
+
+        function initDashboard() {
+            document.getElementById('file-uploader').classList.add('hidden');
+            
+            // Extract unique stocks
+            stockList = [...new Set(rawData.map(r => r.SHARE_CODE))].sort();
+
+            // Set metadata
+            const sampleDate = rawData[0]?.DATE ? new Date((rawData[0].DATE - (25567 + 2)) * 86400 * 1000).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : "30-Jun-2026";
+            document.getElementById('date-badge').innerText = `📅 Data: ${sampleDate}`;
+            document.getElementById('stocks-badge').innerText = `📊 ${stockList.length} Stocks`;
+
+            // Populate selector
+            const select = document.getElementById('stock-select');
+            select.innerHTML = '';
+            stockList.forEach(code => {
+                const opt = document.createElement('option');
+                opt.value = code;
+                opt.innerText = code;
+                select.appendChild(opt);
+            });
+
+            // Event Listeners
+            select.addEventListener('change', (e) => renderStock(e.target.value));
+            document.getElementById('search-input').addEventListener('input', (e) => {
+                const query = e.target.value.toUpperCase();
+                const matched = stockList.find(s => s.startsWith(query)) || 
+                                rawData.find(r => r.INVESTOR_NAME && r.INVESTOR_NAME.toUpperCase().includes(query))?.SHARE_CODE;
+                if (matched) {
+                    select.value = matched;
+                    renderStock(matched);
+                }
+            });
+
+            // Render Default Stock
+            const defaultStock = stockList.includes('BBCA') ? 'BBCA' : stockList[0];
+            select.value = defaultStock;
+            renderStock(defaultStock);
+        }
+
+        function renderStock(symbol) {
+            const stockRows = rawData.filter(r => r.SHARE_CODE === symbol);
+            if (stockRows.length === 0) return;
+
+            const issuerName = stockRows[0].ISSUER_NAME || symbol;
+            
+            // Update Hero
+            document.getElementById('hero-symbol').innerText = symbol;
+            document.getElementById('hero-name').innerText = issuerName;
+
+            // Calculations
+            const totalShareholders = stockRows.length;
+            const corpCount = stockRows.filter(r => r.INVESTOR_CLASSIFICATION === 'Corporate').length;
+            const indivCount = stockRows.filter(r => r.INVESTOR_CLASSIFICATION === 'Individual').length;
+            const instCount = totalShareholders - (corpCount + indivCount);
+
+            const sortedByPct = [...stockRows].sort((a, b) => (parseFloat(b.PERCENTAGE) || 0) - (parseFloat(a.PERCENTAGE) || 0));
+            const topHolder = sortedByPct[0] || {};
+
+            const localRows = stockRows.filter(r => r.LOCAL_FOREIGN === 'L');
+            const foreignRows = stockRows.filter(r => r.LOCAL_FOREIGN === 'F');
+
+            const localPct = localRows.reduce((acc, r) => acc + (parseFloat(r.PERCENTAGE) || 0), 0);
+            const foreignPct = foreignRows.reduce((acc, r) => acc + (parseFloat(r.PERCENTAGE) || 0), 0);
+            const totalTrackedPct = localPct + foreignPct;
+            const publicFloat = Math.max(0, 100 - totalTrackedPct);
+
+            // Metrics Update
+            document.getElementById('m-total').innerText = totalShareholders;
+            document.getElementById('m-total-sub').innerText = `${corpCount} Corp · ${indivCount} Indiv · ${instCount} Inst`;
+
+            document.getElementById('m-control-pct').innerText = `${(parseFloat(topHolder.PERCENTAGE) || 0).toFixed(1)}%`;
+            document.getElementById('m-control-name').innerText = topHolder.INVESTOR_NAME || '-';
+
+            document.getElementById('m-local').innerText = `${localPct.toFixed(1)}%`;
+            document.getElementById('m-local-sub').innerText = `${localRows.length} Pemegang Saham`;
+
+            document.getElementById('m-foreign').innerText = `${foreignPct.toFixed(1)}%`;
+            document.getElementById('m-foreign-sub').innerText = `${foreignRows.length} Pemegang Saham`;
+
+            // RENDER SHAREHOLDER RELATIONSHIP STRUCTURE
+            document.getElementById('structure-company-name').innerText = issuerName;
+            document.getElementById('parent-name').innerText = topHolder.INVESTOR_NAME || '--';
+            document.getElementById('parent-pct').innerText = `${(parseFloat(topHolder.PERCENTAGE) || 0).toFixed(2)}%`;
+            document.getElementById('parent-type').innerText = `${(topHolder.INVESTOR_CLASSIFICATION || 'CORPORATE').toUpperCase()} · ${(topHolder.LOCAL_FOREIGN === 'L' ? 'LOCAL' : 'FOREIGN')}`;
+
+            // Significant Shareholders (All except the controlling holder)
+            const minorHolders = sortedByPct.slice(1);
+            document.getElementById('key-holders-badge').innerText = `${minorHolders.length} KEY HOLDERS`;
+
+            const minorContainer = document.getElementById('minor-nodes-container');
+            minorContainer.innerHTML = '';
+
+            if (minorHolders.length > 0) {
+                minorHolders.forEach(h => {
+                    const pctVal = parseFloat(h.PERCENTAGE) || 0;
+                    const isIndiv = h.INVESTOR_CLASSIFICATION === 'Individual';
+                    const tagBg = isIndiv ? 'bg-emerald-50 text-emerald-600' : 'bg-indigo-50 text-indigo-600';
+
+                    minorContainer.innerHTML += `
+                        <div class="bg-white border border-slate-200 rounded-2xl p-4 text-center min-w-[220px] flex-1 shadow-sm relative">
+                            <div class="absolute -top-3 left-1/2 -translate-x-1/2 w-0.5 h-3 bg-slate-300"></div>
+                            <div class="font-extrabold text-xs text-slate-800 uppercase tracking-tight">${h.INVESTOR_NAME || '-'}</div>
+                            <div class="text-lg font-black text-slate-700 my-1">${pctVal.toFixed(2)}%</div>
+                            <span class="text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${tagBg}">
+                                ${(h.INVESTOR_CLASSIFICATION || 'CORPORATE').toUpperCase()}
+                            </span>
+                        </div>
+                    `;
+                });
+            } else {
+                minorContainer.innerHTML = `<div class="text-xs text-slate-400 italic py-2">Tidak ada pemegang saham signifikan tambahan (>1%).</div>`;
+            }
+
+            // Table Update
+            const tbody = document.getElementById('shareholders-table');
+            tbody.innerHTML = '';
+            stockRows.forEach(row => {
+                const totalShares = row.TOTAL_HOLDING_SHARES ? Number(row.TOTAL_HOLDING_SHARES).toLocaleString('id-ID') : '-';
+                const pct = parseFloat(row.PERCENTAGE) || 0;
+                const isLocal = row.LOCAL_FOREIGN === 'L';
+
+                tbody.innerHTML += `
+                    <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
+                        <td class="py-3 px-2 font-bold text-slate-800">${row.INVESTOR_NAME || '-'}</td>
+                        <td class="py-3 px-2 text-slate-500">${row.INVESTOR_CLASSIFICATION || '-'}</td>
+                        <td class="py-3 px-2">
+                            <span class="px-2 py-0.5 rounded text-xs font-bold ${isLocal ? 'bg-blue-100 text-blue-600' : 'bg-amber-100 text-amber-600'}">
+                                ${isLocal ? 'Local' : 'Foreign'}
+                            </span>
+                        </td>
+                        <td class="py-3 px-2 text-right font-mono">${totalShares}</td>
+                        <td class="py-3 px-2 text-right font-bold text-indigo-600">${pct.toFixed(2)}%</td>
+                    </tr>
+                `;
+            });
+
+            // Charts Update
+            const donutLabels = stockRows.map(r => r.INVESTOR_NAME);
+            const donutValues = stockRows.map(r => parseFloat(r.PERCENTAGE) || 0);
+            if (publicFloat > 0) {
+                donutLabels.push('Public Float');
+                donutValues.push(publicFloat);
+            }
+
+            if (donutChartInstance) donutChartInstance.destroy();
+            donutChartInstance = new Chart(document.getElementById('donutChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: donutLabels,
+                    datasets: [{
+                        data: donutValues,
+                        backgroundColor: ['#6366f1', '#3b82f6', '#f59e0b', '#10b981', '#ec4899', '#cbd5e1']
+                    }]
+                },
+                options: { plugins: { legend: { display: false } } }
+            });
+
+            if (barChartInstance) barChartInstance.destroy();
+            barChartInstance = new Chart(document.getElementById('barChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['Local', 'Foreign', 'Public Float'],
+                    datasets: [{
+                        data: [localPct, foreignPct, publicFloat],
+                        backgroundColor: ['#3b82f6', '#f59e0b', '#cbd5e1']
+                    }]
+                },
+                options: { 
+                    indexAxis: 'y', 
+                    plugins: { legend: { display: false } },
+                    scales: { x: { max: 100 } }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
